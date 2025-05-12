@@ -1,14 +1,14 @@
 import os
 import json
-import pytz
 import pandas as pd
+import requests
 import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime
 from streamlit_javascript import st_javascript
+from io import BytesIO
 
-EXPORT_DIR = "exports"
-
+# Job color codes
 JOB_COLORS = {
     "VPR": "#108210", "MNK": "#D69C00", "DRG": "#4164CD", "BLM": "#A579D6",
     "SAM": "#E46D04", "RPR": "#965A90", "NIN": "#FC92E1", "PCT": "#FC92E1",
@@ -37,17 +37,31 @@ def blend_colors(hex_list):
     b = int(sum(c[2] for c in rgb_list) / len(rgb_list)) if rgb_list else 170
     return f"#{r:02X}{g:02X}{b:02X}"
 
-@st.cache_data
+@st.cache_data(show_spinner="Downloading data from GitHub...")
 def load_data():
-    all_files = [f for f in os.listdir(EXPORT_DIR) if f.endswith(".csv.gz")]
-    all_data = []
-    for file in sorted(all_files):
-        path = os.path.join(EXPORT_DIR, file)
-        df = pd.read_csv(path, compression="gzip", parse_dates=["Timestamp"])
+    repo = "Rinn-K/PFTracker"
+    branch = "main"
+    folder = "exports"
+
+    api_url = f"https://api.github.com/repos/{repo}/contents/{folder}?ref={branch}"
+    response = requests.get(api_url)
+    response.raise_for_status()
+
+    files = response.json()
+    csv_urls = [
+        f"https://raw.githubusercontent.com/{repo}/{branch}/{folder}/{f['name']}"
+        for f in files if f['name'].endswith(".csv.gz")
+    ]
+
+    all_dfs = []
+    for url in sorted(csv_urls):
+        gz_data = requests.get(url).content
+        df = pd.read_csv(BytesIO(gz_data), compression="gzip", parse_dates=["Timestamp"])
         df["Timestamp Rounded"] = df["Timestamp"].dt.floor("15min")
-        all_data.append(df)
-    if all_data:
-        df_all = pd.concat(all_data).drop_duplicates(subset=["Timestamp", "ID"])
+        all_dfs.append(df)
+
+    if all_dfs:
+        df_all = pd.concat(all_dfs).drop_duplicates(subset=["Timestamp", "ID"])
         return df_all.sort_values("Timestamp Rounded")
     return pd.DataFrame()
 

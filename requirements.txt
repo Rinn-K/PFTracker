@@ -3,3 +3,5 @@ pandas
 requests
 plotly
 streamlit-javascript
+gspread
+oauth2client

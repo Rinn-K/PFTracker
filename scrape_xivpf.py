@@ -14,16 +14,19 @@ html = response.text
 
 listings = []
 
+# Match each listing
 listing_pattern = re.compile(
     r'<div\s+class="listing"[^>]*?data-id="(\d+)"[^>]*?data-centre="([^"]+)"[^>]*?data-pf-category="([^"]+)"[\s\S]*?<\/div>\s*<\/div>',
     re.MULTILINE
 )
 
-# ⏰ Round time to previous 15-minute block
+# ⏰ Round timestamp to previous 15-minute mark
 now = datetime.utcnow()
 rounded_time = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
 timestamp_str = rounded_time.strftime("%Y-%m-%d %H:%M:%S")
+filename = os.path.join(EXPORT_DIR, f"{rounded_time.strftime('%Y-%m-%d')}.csv.gz")
 
+# Parse each listing
 for match in listing_pattern.finditer(html):
     block = match.group(0)
     listing_id = match.group(1)
@@ -40,9 +43,12 @@ for match in listing_pattern.finditer(html):
     for m in re.finditer(r'<div class="slot(.*?)"[^>]*title="([^"]*)"', block):
         classes, title = m.groups()
         role = "unknown"
-        if "tank" in classes: role = "tank"
-        elif "healer" in classes: role = "healer"
-        elif "dps" in classes: role = "dps"
+        if "tank" in classes:
+            role = "tank"
+        elif "healer" in classes:
+            role = "healer"
+        elif "dps" in classes:
+            role = "dps"
 
         party.append({
             "filled": "filled" in classes,
@@ -50,7 +56,7 @@ for match in listing_pattern.finditer(html):
             "job": title
         })
 
-    # Tag detection
+    # Tag extraction
     tags = {
         "[Practice]": 0,
         "[Loot]": 0,
@@ -74,14 +80,16 @@ for match in listing_pattern.finditer(html):
         "[One Player per Job]": tags["[One Player per Job]"]
     })
 
-# Save to CSV
+# Save to .csv.gz
 if listings:
     df = pd.DataFrame(listings)
-    filename = os.path.join(EXPORT_DIR, f"{rounded_time.strftime('%Y-%m-%d')}.csv")
+
     if os.path.exists(filename):
-        df_existing = pd.read_csv(filename)
-        df = pd.concat([df_existing, df], ignore_index=True).drop_duplicates(subset=["Timestamp", "ID"])
-    df.to_csv(filename, index=False)
-    print(f"✅ Saved {len(df)} listings to {filename}")
+        df_existing = pd.read_csv(filename, compression="gzip")
+        df = pd.concat([df_existing, df], ignore_index=True)
+        df = df.drop_duplicates(subset=["Timestamp", "ID"])
+
+    df.to_csv(filename, index=False, compression="gzip")
+    print(f"✅ Saved {len(df)} total listings to {filename}")
 else:
     print("⚠️ No listings found.")

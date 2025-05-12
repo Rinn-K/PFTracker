@@ -146,10 +146,14 @@ df = df[df["Data Centre"] == selected_dc]
 
 all_duties = sorted(df["Duty"].dropna().unique())
 duty_key = f"duties_{selected_dc}"
-if duty_key not in st.session_state:
-    st.session_state[duty_key] = []
+default_duties = st.session_state.get(duty_key, [])
 
-selected_duties = st.sidebar.multiselect("Duties", all_duties, default=st.session_state[duty_key], key=duty_key)
+selected_duties = st.sidebar.multiselect(
+    "Duties",
+    all_duties,
+    default=default_duties,
+    key=duty_key
+)
 df = df[df["Duty"].isin(selected_duties)]
 
 tag_options = ["None", "[Practice]", "[Duty Completion]", "[Loot]"]

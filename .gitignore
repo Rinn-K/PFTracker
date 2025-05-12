@@ -1,0 +1,17 @@
+# Ignore PyCharm/IntelliJ project files
+.idea/
+
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+
+# Ignore virtual environments
+venv/
+env/
+
+# Ignore credentials
+credentials.json
+creds/
+
+# Ignore temp data
+temp/

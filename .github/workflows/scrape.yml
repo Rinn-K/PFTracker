@@ -1,0 +1,34 @@
+name: Scrape XIVPF
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:
+
+jobs:
+  scrape-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install requests pandas
+
+    - name: Run scraper
+      run: python scrape_xivpf.py
+
+    - name: Commit and push if changes
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add exports/
+        git diff --quiet && git diff --staged --quiet || git commit -m "Auto scrape $(date -u +'%Y-%m-%d %H:%M')"
+        git push

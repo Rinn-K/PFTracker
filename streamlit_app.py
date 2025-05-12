@@ -4,9 +4,22 @@ import pandas as pd
 import requests
 import streamlit as st
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
 from streamlit_javascript import st_javascript
 from io import BytesIO
+
+# --- Page Header ---
+st.set_page_config(page_title="PFTracker", layout="wide")
+
+st.markdown("""
+    <h1 style='font-size: 42px; margin-bottom: 0;'>PFTracker</h1>
+    <p style='font-size: 16px; color: #AAA; margin-top: 4px;'>
+        This page shows how many parties in Final Fantasy XIV are still looking for at least one job from a selected group at different times of the day.
+    </p>
+    <p style='font-size: 14px; color: #AAA; margin-top: 0.5em;'>
+        For example, if "WHM" and "SGE" are selected in a group, the graph will show how many parties are still looking for either of these jobs at the specified timeframe.
+    </p>
+""", unsafe_allow_html=True)
 
 # Job color codes
 JOB_COLORS = {
@@ -38,7 +51,7 @@ def blend_colors(hex_list):
     return f"#{r:02X}{g:02X}{b:02X}"
 
 @st.cache_data(show_spinner="Downloading data from GitHub...")
-def load_data():
+def load_data(tz_offset_min, cache_key):
     repo = "Rinn-K/PFTracker"
     branch = "main"
     folder = "exports"
@@ -62,8 +75,22 @@ def load_data():
 
     if all_dfs:
         df_all = pd.concat(all_dfs).drop_duplicates(subset=["Timestamp", "ID"])
+        df_all["Timestamp Rounded"] = df_all["Timestamp Rounded"] + pd.to_timedelta(-tz_offset_min, unit="m")
         return df_all.sort_values("Timestamp Rounded")
     return pd.DataFrame()
+
+# --- Get timezone offset before loading data ---
+tz_offset_min = st_javascript("new Date().getTimezoneOffset();") or 0
+
+# --- Create a cache key that updates every 15 minutes ---
+now = datetime.utcnow()
+rounded_15 = now - timedelta(minutes=now.minute % 15,
+                             seconds=now.second,
+                             microseconds=now.microsecond)
+cache_key = rounded_15.strftime('%Y-%m-%d-%H-%M')
+
+# --- Load data ---
+df = load_data(tz_offset_min, cache_key)
 
 def extract_combat_jobs(df):
     jobs = set()
@@ -95,30 +122,12 @@ def count_group_match(row, job_list):
     )
     return int(unfilled_match)
 
-# --- Page Header ---
-st.set_page_config(page_title="PFTracker", layout="wide")
-
-st.markdown("""
-    <h1 style='font-size: 42px; margin-bottom: 0;'>PFTracker</h1>
-    <p style='font-size: 16px; color: #AAA; margin-top: 4px;'>
-        This page shows how many parties in Final Fantasy XIV are still looking for at least one job from a selected group at different times of the day.
-    </p>
-    <p style='font-size: 14px; color: #AAA; margin-top: 0.5em;'>
-        For example, if "WHM" and "SGE" are selected in a group, the graph will show how many parties are still looking for either of these jobs at the specified timeframe.
-    </p>
-""", unsafe_allow_html=True)
-
 # --- Load and process data ---
-df = load_data()
 if df.empty:
     st.warning("No data available in 'exports/'")
     st.stop()
 
 # --- JS-based Timezone detection ---
-tz_offset_min = st_javascript("new Date().getTimezoneOffset();")  # in minutes
-if tz_offset_min is None:
-    tz_offset_min = 0  # fallback to UTC
-df["Timestamp Rounded"] = df["Timestamp Rounded"] + pd.to_timedelta(-tz_offset_min, unit="m")
 df["Date"] = df["Timestamp Rounded"].dt.date
 
 # --- Sidebar Filters ---
